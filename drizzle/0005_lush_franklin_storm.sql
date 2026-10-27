@@ -1,0 +1,1 @@
+ALTER TABLE "ask_events" RENAME COLUMN "modelId" TO "model_id";
