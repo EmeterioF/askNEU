@@ -1,6 +1,7 @@
 import { config } from 'dotenv'
 
-config({ path: '.env', override: true })
+config({ path: '.env' })
+config({ path: '.env.local', override: true })
 
 export const ACCOUNT_ID = requireEnvironment('CF_ACCOUNT_ID')
 export const API_TOKEN = requireEnvironment('CF_API_TOKEN')
