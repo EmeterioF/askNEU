@@ -31,3 +31,11 @@ export const faqEntries = pgTable('faq_entries', {
     .defaultNow()
     .notNull(),
 })
+
+export const appSettings = pgTable('app_settings', {
+  key: varchar({ length: 100 }).primaryKey(),
+  value: text().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+})
