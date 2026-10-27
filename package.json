@@ -3,10 +3,13 @@
   "type": "module",
   "dependencies": {
     "@hono/vercel": "^1.0.1",
+    "@neondatabase/serverless": "^1.2.0",
     "hono": "^4.13.14"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "dotenv": "^18.0.9",
+    "drizzle-kit": "^0.31.11",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2"
   }
