@@ -1,0 +1,86 @@
+{
+  "id": "5fac823f-1f9d-4dca-b0da-f880faa243bc",
+  "prevId": "f749c7ee-e491-4535-a34f-12cba5c06543",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.offices": {
+      "name": "offices",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "offices_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "room": {
+          "name": "room",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "building": {
+          "name": "building",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hours": {
+          "name": "hours",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contact": {
+          "name": "contact",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

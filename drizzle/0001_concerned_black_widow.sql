@@ -1,0 +1,1 @@
+ALTER TABLE "offices" ADD COLUMN "building" varchar(100) NOT NULL;

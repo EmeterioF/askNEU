@@ -4,6 +4,7 @@
   "dependencies": {
     "@hono/vercel": "^1.0.1",
     "@neondatabase/serverless": "^1.2.0",
+    "drizzle-orm": "^0.45.4",
     "hono": "^4.13.14"
   },
   "devDependencies": {
