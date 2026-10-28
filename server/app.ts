@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { sql } from "../server/db/index.js";
+import { sql } from "./db/index.js";
 
 const app = new Hono();
 

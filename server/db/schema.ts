@@ -1,10 +1,12 @@
 import {
+  boolean,
+  index,
   integer,
   pgEnum,
-  boolean,
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core'
 
@@ -18,6 +20,7 @@ export const offices = pgTable('offices', {
   contact: varchar({ length: 255 }),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .defaultNow()
+    .$onUpdate(() => new Date())
     .notNull(),
 })
 
@@ -31,8 +34,9 @@ export const faqEntries = pgTable('faq_entries', {
   status: boolean().notNull().default(false),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .defaultNow()
+    .$onUpdate(() => new Date())
     .notNull(),
-})
+}, (t) => [index('faq_entries_office_id_idx').on(t.officeId)])
 
 // USED FOR STALE CHECK
 export const appSettings = pgTable('app_settings', {
@@ -40,6 +44,7 @@ export const appSettings = pgTable('app_settings', {
   value: text().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .defaultNow()
+    .$onUpdate(() => new Date())
     .notNull(),
 })
 
@@ -64,14 +69,17 @@ export const askEvents = pgTable('ask_events', {
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
-})
+}, (t) => [
+  index('ask_events_created_at_idx').on(t.createdAt),
+  index('ask_events_faq_id_idx').on(t.faqId),
+])
 
 // AUDIO METADATA FOR PUBLISHED FAQ ANSWERS
 export const faqAudio = pgTable('faq_audio', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   faqId: integer('faq_id')
     .notNull()
-    .references(() => faqEntries.id),
+    .references(() => faqEntries.id, { onDelete: 'cascade' }),
   kind: varchar({ length: 30 }).notNull().default('answer'),
   blobUrl: text('blob_url').notNull(),
   textHash: varchar('text_hash', { length: 128 }).notNull(),
@@ -79,4 +87,4 @@ export const faqAudio = pgTable('faq_audio', {
   generatedAt: timestamp('generated_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
-})
+}, (t) => [uniqueIndex('faq_audio_faq_id_kind_idx').on(t.faqId, t.kind)])
