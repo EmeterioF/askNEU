@@ -1,5 +1,5 @@
 import { createMiddleware } from "hono/factory";
-import { auth } from "../db/auth.js";
+import { auth } from "../authConfig.js";
 
 export type AuthEnv = {
   Variables: {
