@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
+import { adminFaqsRoutes } from './routes/admin/faqs.js'
 import { adminOfficeRoutes } from './routes/admin/offices.js'
 import { authRoutes } from './routes/auth.js'
 import { healthRoutes } from './routes/health.js'
@@ -18,5 +19,6 @@ app.onError((err, c) => {
 app.route('/api', healthRoutes)
 app.route('/api/auth', authRoutes)
 app.route('/api/admin', adminOfficeRoutes)
+app.route('/api/admin', adminFaqsRoutes)
 
 export default app
