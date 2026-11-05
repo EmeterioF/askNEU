@@ -1,3 +1,4 @@
+import Kiosk from './Kiosk'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { api, errorMessage, useSession, type FAQ, type Office, type User } from './api'
@@ -11,19 +12,64 @@ function Modal({ title, children, close, busy = false }: { title: string; childr
 }
 function Alert({ children, success = false }: { children: ReactNode; success?: boolean }) { return <div role={success ? 'status' : 'alert'} className={`alert ${success ? 'success' : ''}`}>{children}</div> }
 function Login() {
-  const { user, expired, set } = useSession(); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [visible, setVisible] = useState(false)
+  const { user, set } = useSession()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [visible, setVisible] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [touched, setTouched] = useState({ email: false, password: false })
+  const emailRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
+  const emailError = !email.trim() ? 'Email is required.' : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? 'Enter a valid email address.' : ''
+  const passwordError = !password.trim() ? 'Password is required.' : ''
   if (user) return <Navigate to="/faqs" replace />
   async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault(); const form = new FormData(e.currentTarget); setBusy(true); setError('')
-    try { const {data} = await api.post<{user: User}>('/auth/sign-in/email', { email: String(form.get('email')).trim(), password: form.get('password') }); if (!data.user) throw new Error('Missing session'); set(data.user) }
-    catch (err) { setError(errorMessage(err)) } finally { setBusy(false) }
+    e.preventDefault()
+    if (busy) return
+    setTouched({ email: true, password: true })
+    setError('')
+    if (emailError || passwordError) {
+      if (emailError) emailRef.current?.focus()
+      else passwordRef.current?.focus()
+      return
+    }
+    setBusy(true)
+    try {
+      const { data } = await api.post<{ user: User }>('/auth/sign-in/email', { email: email.trim(), password })
+      if (!data.user) throw new Error('Missing session')
+      set(data.user)
+    } catch (err) { setError(errorMessage(err)) }
+    finally { setBusy(false) }
   }
-  return <main className="login"><section className="login-story"><div className="brand">AskNEU<span>STAFF CONSOLE</span></div><div><p className="eyebrow">CAMPUS INFORMATION, KEPT CURRENT</p><h1>A clear answer<br/>starts with you.</h1><p>Manage the approved information that helps students find their next step.</p></div><small>New Era University · Integration prototype</small></section><section className="login-form"><div className="login-inner"><p className="eyebrow">AUTHORIZED STAFF</p><h2>Welcome back.</h2><p className="muted">Sign in to manage FAQs and office information.</p>{expired && <Alert>Your session has expired. Please sign in again.</Alert>}<form onSubmit={submit}><label>Email<input name="email" type="email" autoComplete="username" placeholder="Your staff email" required disabled={busy}/></label><label>Password<div className="password"><input name="password" type={visible ? 'text' : 'password'} autoComplete="current-password" required disabled={busy}/><button type="button" onClick={() => setVisible(!visible)} aria-label={visible ? 'Hide password' : 'Show password'}>{visible ? 'Hide' : 'Show'}</button></div></label>{error && <Alert>{error}</Alert>}<button className="primary full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in →'}</button></form><p className="caption">Use a staff account provided by your backend developer.</p></div></section></main>
+  return <main className="login">
+    <section className="login-story"><div className="brand">AskNEU<span>STAFF CONSOLE</span></div><div><p className="eyebrow">CAMPUS INFORMATION, KEPT CURRENT</p><h1>A clear answer<br/>starts with you.</h1><p>Manage the approved information that helps students find their next step.</p></div><small>New Era University · Integration prototype</small></section>
+    <section className="login-form"><div className="login-inner">
+      <p className="eyebrow">AUTHORIZED STAFF</p><h2>Welcome back.</h2><p className="muted">Sign in to manage FAQs and office information.</p>
+      <form onSubmit={submit} noValidate>
+        <label htmlFor="login-email">Email
+          <input id="login-email" ref={emailRef} name="email" type="email" autoComplete="username" placeholder="Your staff email" required disabled={busy}
+            value={email} onChange={e => { setEmail(e.target.value); setError('') }} onBlur={() => setTouched(old => ({ ...old, email: true }))}
+            aria-invalid={touched.email && !!emailError} aria-describedby={touched.email && emailError ? 'email-error' : undefined}/>
+          {touched.email && emailError && <span id="email-error" className="field-error" aria-live="polite">{emailError}</span>}
+        </label>
+        <label htmlFor="login-password">Password</label>
+        <div className="password login-password"><input id="login-password" ref={passwordRef} name="password" type={visible ? 'text' : 'password'} autoComplete="current-password" required disabled={busy}
+            value={password} onChange={e => { setPassword(e.target.value); setError('') }} onBlur={() => setTouched(old => ({ ...old, password: true }))}
+            aria-invalid={touched.password && !!passwordError} aria-describedby={touched.password && passwordError ? 'password-error' : undefined}/>
+          <button type="button" disabled={busy} onClick={() => setVisible(!visible)} aria-label={visible ? 'Hide password' : 'Show password'} aria-pressed={visible}>{visible ? 'Hide' : 'Show'}</button>
+        </div>
+        {touched.password && passwordError && <span id="password-error" className="field-error" aria-live="polite">{passwordError}</span>}
+        {error && <Alert>{error}</Alert>}
+        <button className="primary full login-submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in →'}</button>
+      </form><p className="caption">Use a staff account provided by your backend developer.</p>
+    </div></section>
+  </main>
 }
 function Shell() {
   const {user, set} = useSession(); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
   if (!user) return <Navigate to="/login" replace />
-  async function logout() { setBusy(true); try { await api.post('/auth/sign-out'); set(null) } catch (err) { setError(errorMessage(err)) } finally { setBusy(false) } }
+  async function logout() { setBusy(true); try { await api.post('/auth/sign-out', {}); set(null) } catch (err) { setError(errorMessage(err)) } finally { setBusy(false) } }
   return <div className="shell"><aside><div className="brand">AskNEU<span>STAFF CONSOLE</span></div><p className="nav-label">WORKSPACE</p><nav><NavLink to="/faqs"><span>≡</span>FAQ Management</NavLink><NavLink to="/offices"><span>⌂</span>Office Management</NavLink><NavLink to="/test"><span>◇</span>Test</NavLink></nav><div className="sidebar-bottom"><div className="avatar">{(user.name || user.email).slice(0,1).toUpperCase()}</div><div><strong>{user.name || 'Staff'}</strong><small>{user.email}</small></div><button onClick={logout} disabled={busy}>{busy ? 'Signing out…' : 'Sign out'}</button></div></aside><div className="workspace"><header className="topbar"><span>Staff workspace</span><span className="prototype">Integration prototype</span></header><main className="content">{error && <Alert>{error}</Alert>}<Routes><Route path="/faqs" element={<Management kind="faqs" key="faqs"/>}/><Route path="/offices" element={<Management kind="offices" key="offices"/>}/><Route path="/test" element={<TestPage/>}/><Route path="*" element={<Navigate to="/faqs" replace/>}/></Routes></main></div></div>
 }
 type RecordItem = FAQ | Office
@@ -51,10 +97,12 @@ function Management({kind}: {kind: 'faqs' | 'offices'}) {
     {remove && <Modal title={`Delete this ${faqMode ? 'FAQ' : 'office'}?`} close={()=>setRemove(null)} busy={busy}><p className="delete-name">{isFaq(remove) ? remove.question : remove.name}</p><p>This permanently removes the record. This action cannot be undone.</p>{!faqMode && <p className="caption">Offices linked to FAQs must have those links reassigned first.</p>}{dialogError && <Alert>{dialogError}</Alert>}<footer className="modal-footer"><button disabled={busy} onClick={()=>setRemove(null)}>Cancel</button><button className="destructive" disabled={busy} onClick={()=>void deleteRecord()}>{busy ? 'Deleting…' : 'Delete permanently'}</button></footer></Modal>}
   </>
 }
-function TestPage() { return <><p className="eyebrow">INTEGRATION WORKSPACE</p><h1>Test</h1><p className="muted">A space for the future student question flow.</p><section className="test-panel"><span className="badge">Coming later</span><h2>Question testing is not connected yet.</h2><p>The current backend supports staff authentication, FAQs, and offices.</p><label>Question<input disabled placeholder="The question-flow API is not available yet"/></label><button className="primary" disabled>Test question</button><p className="caption">Use FAQ and Office Management to test the available endpoints.</p></section></> }
-export default function App() {
+function TestPage() { return <><p className="eyebrow">INTEGRATION WORKSPACE</p><h1>Kiosk testing</h1><p className="muted">Preview the student experience with your published database content.</p><section className="test-panel"><span className="badge">Live backend content</span><h2>Try the student kiosk.</h2><p>Create an FAQ and publish it, then open the kiosk and refresh its questions. Answers and office details come from the backend.</p><p><a className="primary" style={{display:'inline-block',padding:'12px 20px',borderRadius:7}} href="/kiosk" target="_blank" rel="noreferrer">Open kiosk simulator ↗</a></p><p className="caption">Exact-question matching only. No AI matching or microphone input. Browser audio is optional.</p></section></> }
+function StaffApp() {
   const { ready, set } = useSession(); const [error,setError] = useState(''); const [retry,setRetry] = useState(0); const navigate = useNavigate()
   useEffect(()=> { let active=true; api.get<{user: User} | null>('/auth/get-session').then(({data})=>{if(active) set(data?.user ?? null)}).catch(err=>{if(active) setError(errorMessage(err))}); return ()=>{active=false} },[retry,set])
   if (!ready) return <main className="boot"><div className="brand">AskNEU</div>{error ? <><Alert>{error}</Alert><button onClick={()=>{setError('');setRetry(r=>r+1)}}>Retry connection</button><button onClick={()=>{set(null);navigate('/login')}}>Go to sign in</button></> : <p role="status">Checking your session…</p>}</main>
   return <Routes><Route path="/login" element={<Login/>}/><Route path="*" element={<Shell/>}/></Routes>
 }
+
+export default function App() { return <Routes><Route path="/kiosk" element={<Kiosk/>}/><Route path="*" element={<StaffApp/>}/></Routes> }

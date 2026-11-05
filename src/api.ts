@@ -18,6 +18,7 @@ export function errorMessage(error: unknown) {
   if (!axios.isAxiosError(error)) return 'Something went wrong. Please try again.'
   if (!error.response) return 'Cannot reach the backend. Check that it is running on port 3000, then retry.'
   const status = error.response.status
+  if (status === 401 && error.config?.url === '/auth/sign-in/email') return 'Incorrect email or password. Please try again.'
   if (status === 401) return 'Your session has expired. Sign in again.'
   if (status === 404) return 'This record no longer exists. Refresh the list.'
   if (status >= 500) return 'The server could not complete this request. Please try again.'

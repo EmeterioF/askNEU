@@ -42,7 +42,7 @@ Without backend configuration, the frontend can run but will show a connection e
 - FAQ list, local search/category/status filters, create/edit, publish/unpublish, and confirmed deletion.
 - Loading, empty, success, validation, unauthorized, and server-error handling.
 - Responsive desktop/mobile styling and native dialogs.
-- Test placeholder only; student kiosk and AI question flow are not implemented.
+- Student kiosk simulator at `/kiosk`, linked from the staff Test page. It reads published database FAQs through new backend routes. Exact-question matching and browser read-aloud are supported; AI matching and microphone/device integration are not implemented.
 
 ## Validation
 
@@ -58,3 +58,7 @@ npm run build
 Read [TEAM_GUIDE.md](TEAM_GUIDE.md) for every file's purpose, what to edit, API payloads, known limitations, and a manual integration checklist.
 
 Installed packages (`node_modules`), generated files (`dist`), and private environment files are intentionally excluded. Classmates recreate dependencies with `npm ci`.
+
+## Connected kiosk simulator
+
+See [KIOSK_TESTING.md](KIOSK_TESTING.md) for setup, endpoint contracts, limitations, and the publish/edit/unpublish test sequence. Both the frontend and backend changes are required.
