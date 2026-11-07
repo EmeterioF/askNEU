@@ -1,0 +1,4 @@
+dependencies:
+  idf: ">=5.0"
+  espressif/esp-box-3: "*"
+  chmorgan/esp-libhelix-mp3: "^1.0.3"

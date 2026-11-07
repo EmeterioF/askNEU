@@ -1,14 +1,16 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "module": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "strict": true,
     "skipLibCheck": true,
-    "types": ["node"],
+    "types": ["node", "vite/client"],
     "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx",
     "rootDir": ".",
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "noEmit": true
   },
-  "exclude": ["node_modules", "dist"]
+  "include": ["api", "packages", "scripts", "server", "src", "vite.config.ts"],
+  "exclude": ["node_modules", "dist", "firmware"]
 }
