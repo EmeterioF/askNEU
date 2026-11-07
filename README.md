@@ -1,4 +1,4 @@
-# AskNEU
+﻿# AskNEU
 
 > A friendly university information kiosk that helps students find the right answer or office.
 
@@ -49,6 +49,7 @@ The frontend and backend live in one repository and deploy together to Vercel.
 - PostgreSQL database with Drizzle ORM
 - React + Vite frontend scaffold
 - Health checks for the API and database
+- Publish-time English MP3 generation with Cloudflare Aura-2 and Vercel Blob
 
 The voice question flow and kiosk experience are planned next.
 
@@ -100,6 +101,8 @@ All admin routes require a signed-in staff session.
 | `POST` | `/api/auth/sign-in/email` | Sign in |
 | `GET`, `POST` | `/api/admin/faqs` | List or create FAQs |
 | `PATCH`, `DELETE` | `/api/admin/faqs/:id` | Edit or delete an FAQ |
+| `POST` | `/api/admin/faqs/:id/publish` | Generate MP3, upload it, and publish an FAQ |
+| `POST` | `/api/admin/faqs/:id/audio` | Regenerate an FAQ MP3 |
 | `GET`, `POST` | `/api/admin/offices` | List or create offices |
 | `PATCH`, `DELETE` | `/api/admin/offices/:id` | Edit or delete an office |
 
