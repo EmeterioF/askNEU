@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import { put } from '@vercel/blob'
 import { db } from '../../db/index.js'
@@ -27,7 +27,16 @@ export const adminFaqsRoutes = new Hono<AuthEnv>()
 adminFaqsRoutes.use('*', requireSession)
 
 adminFaqsRoutes.get('/faqs', async (c) => {
-  const faqs = await db.select().from(faqEntries)
+  const rows = await db
+    .select({ faq: faqEntries, audioUrl: faqAudio.blobUrl })
+    .from(faqEntries)
+    .leftJoin(
+      faqAudio,
+      and(eq(faqAudio.faqId, faqEntries.id), eq(faqAudio.kind, 'answer')),
+    )
+
+  const faqs = rows.map(({ faq, audioUrl }) => ({ ...faq, audioUrl }))
+
   return c.json({ faqs })
 })
 
@@ -93,6 +102,7 @@ async function generateFaqAudio(id: number) {
     access: 'public',
     contentType: 'audio/mpeg',
     addRandomSuffix: false,
+    allowOverwrite: true,
     cacheControlMaxAge: 31536000,
   })
 
@@ -142,13 +152,18 @@ adminFaqsRoutes.post('/faqs/:id/publish', async (c) => {
   }
 
   try {
-    const faq = await generateFaqAudio(id)
+    const faq = await publishFaq(id)
 
     if (!faq) {
       return c.json({ error: 'FAQ not found' }, 404)
     }
 
-    return c.json({ faq }, 200)
+    const [audio] = await db
+      .select({ audioUrl: faqAudio.blobUrl })
+      .from(faqAudio)
+      .where(eq(faqAudio.faqId, faq.id))
+
+    return c.json({ faq: { ...faq, audioUrl: audio?.audioUrl ?? null } }, 200)
   } catch (error) {
     console.error(
       'FAQ publish failed:',
@@ -172,7 +187,12 @@ adminFaqsRoutes.post('/faqs/:id/audio', async (c) => {
       return c.json({ error: 'FAQ not found' }, 404)
     }
 
-    return c.json({ faq }, 200)
+    const [audio] = await db
+      .select({ audioUrl: faqAudio.blobUrl })
+      .from(faqAudio)
+      .where(eq(faqAudio.faqId, faq.id))
+
+    return c.json({ faq: { ...faq, audioUrl: audio?.audioUrl ?? null } }, 200)
   } catch (error) {
     console.error(
       'FAQ audio regeneration failed:',

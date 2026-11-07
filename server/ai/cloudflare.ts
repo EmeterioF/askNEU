@@ -90,7 +90,7 @@ export async function transcribeAudio(audio: ArrayBuffer) {
   const result = await runCloudflare(
     '@cf/openai/whisper-large-v3-turbo',
     { audio: Buffer.from(audio).toString('base64') },
-    3000,
+    10000,
   )
 
   if (
@@ -114,9 +114,9 @@ export async function pickFaq(system: string, user: string) {
         { role: 'user', content: user },
       ],
       temperature: 0,
-      max_tokens: 80,
+      max_tokens: 200,
     },
-    2500,
+    10000,
   )
 
   if (typeof result === 'string') {
@@ -130,6 +130,27 @@ export async function pickFaq(system: string, user: string) {
     typeof result.response === 'string'
   ) {
     return result.response
+  }
+
+  if (
+    typeof result === 'object' &&
+    result !== null &&
+    'choices' in result &&
+    Array.isArray(result.choices)
+  ) {
+    const firstChoice = result.choices[0]
+
+    if (
+      typeof firstChoice === 'object' &&
+      firstChoice !== null &&
+      'message' in firstChoice &&
+      typeof firstChoice.message === 'object' &&
+      firstChoice.message !== null &&
+      'content' in firstChoice.message &&
+      typeof firstChoice.message.content === 'string'
+    ) {
+      return firstChoice.message.content
+    }
   }
 
   throw new Error('FAQ picker returned an invalid response')
@@ -146,7 +167,6 @@ export async function synthesizeSpeech(text: string) {
       text,
       speaker: 'luna',
       encoding: 'mp3',
-      container: 'none',
     },
     5000,
   )

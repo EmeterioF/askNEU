@@ -3,7 +3,7 @@ import { create } from 'zustand'
 
 export type User = { id: string; name: string; email: string }
 export type Office = { id: number; name: string; room: string; building: string; hours: string; contact: string | null; updatedAt: string }
-export type FAQ = { id: number; question: string; answer: string; category: string; officeId: number | null; status: boolean; updatedAt: string }
+export type FAQ = { id: number; question: string; answer: string; category: string; officeId: number | null; status: boolean; updatedAt: string; audioUrl: string | null }
 export const api = axios.create({ baseURL: '/api', withCredentials: true, timeout: 15000 })
 export const useSession = create<{user: User | null; ready: boolean; expired: boolean; set: (user: User | null) => void}>((set) => ({
   user: null, ready: false, expired: false, set: (user) => set({ user, ready: true, expired: false }),

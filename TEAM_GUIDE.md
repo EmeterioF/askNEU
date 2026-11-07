@@ -4,7 +4,7 @@
 
 This repository contains the temporary staff web frontend for AskNEU. It is a React web application, not React Native. The UI is an integration prototype and is not a final Figma-approved design.
 
-Implemented: login, session restoration, logout, protected navigation, office and FAQ lists, create/edit forms, publish/unpublish, search/category/status filtering, delete confirmation, loading/empty/error/success states, and responsive layouts. The Test page links to a student kiosk simulator. See KIOSK_TESTING.md for its connected, exact-match published-FAQ flow. AI question matching and physical kiosk integration are not implemented.
+Implemented: login, session restoration, logout, protected navigation, office and FAQ lists, create/edit forms, publish/unpublish, search/category/status filtering, delete confirmation, loading/empty/error/success states, and responsive layouts. AI question matching and physical kiosk integration are not implemented.
 
 TypeScript checking and a production build passed during initial development. Authenticated CRUD has NOT been verified end to end because the backend environment/database credentials and test staff account are still required. A page rendering successfully does not prove backend integration works.
 
@@ -18,8 +18,6 @@ TypeScript checking and a production build passed during initial development. Au
 - `Management`: shared FAQ/office screen, list requests, local filtering, create/edit forms, publishing, and deletion. Its `kind` prop chooses FAQs versus offices.
 - `Modal`: shared native HTML dialog, Escape behavior, focus restoration, and close controls.
 - `Alert`: success/error messages.
-- `TestPage`: opens the student kiosk simulator in another tab.
-
 Change screen text, form fields, table columns, navigation, dialog contents, or CRUD behavior here. When adding a backend field, update its model in `api.ts`, form controls, save payload, and displayed values together. If this file grows, split screens/components into separate files while preserving behavior.
 
 ### src/api.ts — backend connection, models, and session
@@ -98,7 +96,3 @@ Clone this repository, run `npm ci`, then `npm run dev`. Start the separately ma
 Create a feature branch such as `feat/faq-layout` from updated `main`. Keep changes focused, run `npm run typecheck` and `npm run build`, then open a pull request into this repository's `main`. The original backend repository uses `dev`; that is a separate repository and workflow.
 
 Manual integration checklist: sign in, create a disposable office, create an unpublished FAQ linked to it, edit the FAQ, publish/unpublish, test search/filters, reload to restore session, cancel a delete, test linked-office deletion, delete the FAQ, delete the office, sign out, and verify protected routes redirect. Stop the backend to test connection errors. Also check keyboard navigation, dialog focus, and narrow screens. Do not use real staff content as disposable test data.
-
-## Student kiosk additions
-
-`src/Kiosk.tsx` implements the public student screen, live question catalog, approved answer/office view, clear/retry controls, and optional browser speech synthesis. `src/kiosk.css` styles it. Top-level routing in App.tsx keeps `/kiosk` independent of staff session restoration. Backend files `server/routes/kiosk.ts` and `kiosk-service.ts` serve published questions and conservative exact matching. `kiosk.test.ts` checks matching behavior. No database migrations are needed. Review KIOSK_TESTING.md before testing or sharing.
