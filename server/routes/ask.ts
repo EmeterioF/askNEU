@@ -1,29 +1,84 @@
+import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
+import {
+  buildUserMessage,
+  parsePickResult,
+  SYSTEM_PROMPT,
+} from '../../packages/core/src/pick.js'
+import { db } from '../db/index.js'
+import {
+  faqAudio,
+  faqEntries,
+  offices,
+} from '../db/tables/app.js'
+import { pickFaq, transcribeAudio } from '../ai/cloudflare.js'
 import { requireDeviceToken, type DeviceEnv } from '../middleware/device.js'
 
 export const askRoutes = new Hono<DeviceEnv>()
 
-// Scoped to the kiosk endpoints only. A wildcard here is mounted as /api/* and
-// would also guard unrelated routes such as the mock audio clips.
 askRoutes.use('/ask', requireDeviceToken)
 askRoutes.use('/faq', requireDeviceToken)
 
-// Placeholder answer until the STT + matcher pipeline exists. The response shape
-// is already the final one from the architecture contract, so the firmware never
-// has to change when the real handler lands.
-const MOCK_ANSWER = {
-  outcome: 'answer' as const,
-  text: 'Enrollment runs June 1 to 15 at the Registrar, room 204.',
+type PublishedFaq = {
+  id: number
+  question: string
+  answer: string
+  updatedAt: Date
+  audioUrl: string | null
   office: {
-    name: 'Registrar',
-    room: '204',
-    hours: '8:00-17:00',
-  },
-  faq_id: 1,
-  updated_at: '2026-11-07',
+    name: string
+    room: string
+    hours: string
+  } | null
+}
+
+async function getPublishedFaqs(): Promise<PublishedFaq[]> {
+  const rows = await db
+    .select({
+      id: faqEntries.id,
+      question: faqEntries.question,
+      answer: faqEntries.answer,
+      updatedAt: faqEntries.updatedAt,
+      audioUrl: faqAudio.blobUrl,
+      officeName: offices.name,
+      officeRoom: offices.room,
+      officeHours: offices.hours,
+    })
+    .from(faqEntries)
+    .leftJoin(offices, eq(faqEntries.officeId, offices.id))
+    .leftJoin(
+      faqAudio,
+      and(eq(faqAudio.faqId, faqEntries.id), eq(faqAudio.kind, 'answer')),
+    )
+    .where(eq(faqEntries.status, true))
+
+  return rows.map((row) => ({
+    id: row.id,
+    question: row.question,
+    answer: row.answer,
+    updatedAt: row.updatedAt,
+    audioUrl: row.audioUrl,
+    office: row.officeName && row.officeRoom && row.officeHours
+      ? {
+          name: row.officeName,
+          room: row.officeRoom,
+          hours: row.officeHours,
+        }
+      : null,
+  }))
+}
+
+function routeResponse() {
+  return {
+    outcome: 'route' as const,
+    text: "I couldn't find that in my published information. Please visit the appropriate university office.",
+    office: null,
+    audio_urls: [],
+  }
 }
 
 askRoutes.post('/ask', async (c) => {
+  const startedAt = Date.now()
   const audio = await c.req.arrayBuffer()
 
   if (audio.byteLength === 0) {
@@ -31,35 +86,92 @@ askRoutes.post('/ask', async (c) => {
   }
 
   const durationMs = Number(c.req.header('x-duration-ms') ?? 0)
-  const origin = new URL(c.req.url).origin
 
-  return c.json({
-    ...MOCK_ANSWER,
-    // The real backend returns MeloTTS MP3, so the mock does the same: it keeps
-    // the device's decode path honest during development.
-    audio_urls: [`${origin}/api/mock/audio/answer.mp3`],
-    latency_ms: {
-      stt: 0,
-      model: 0,
-      total: Number.isFinite(durationMs) ? durationMs : 0,
-    },
-  })
+  if (!Number.isFinite(durationMs) || durationMs < 800) {
+    return c.json(routeResponse())
+  }
+
+  try {
+    const faqs = await getPublishedFaqs()
+
+    if (faqs.length === 0) {
+      return c.json({ error: 'No published FAQs available' }, 503)
+    }
+
+    const sttStartedAt = Date.now()
+    const transcript = await transcribeAudio(audio)
+    const sttMs = Date.now() - sttStartedAt
+
+    if (!transcript) {
+      return c.json(routeResponse())
+    }
+
+    const modelStartedAt = Date.now()
+    const modelOutput = await pickFaq(
+      SYSTEM_PROMPT,
+      buildUserMessage(
+        transcript,
+        faqs.map(({ id, question }) => ({ id, question })),
+      ),
+    )
+    const modelMs = Date.now() - modelStartedAt
+    const picked = parsePickResult(
+      modelOutput,
+      new Set(faqs.map((faq) => faq.id)),
+    )
+    const selected = picked.id === null
+      ? null
+      : faqs.find((faq) => faq.id === picked.id)
+
+    if (!selected) {
+      return c.json({
+        ...routeResponse(),
+        latency_ms: {
+          stt: sttMs,
+          model: modelMs,
+          total: Date.now() - startedAt,
+        },
+      })
+    }
+
+    return c.json({
+      outcome: picked.confidence === 'high' ? 'answer' : 'hedged',
+      text: selected.answer,
+      office: selected.office,
+      audio_urls: selected.audioUrl ? [selected.audioUrl] : [],
+      faq_id: selected.id,
+      updated_at: selected.updatedAt.toISOString().slice(0, 10),
+      latency_ms: {
+        stt: sttMs,
+        model: modelMs,
+        total: Date.now() - startedAt,
+      },
+    })
+  } catch (error) {
+    console.error('Ask pipeline failed:', error instanceof Error ? error.message : error)
+    return c.json({ error: 'Ask service unavailable' }, 503)
+  }
 })
 
-// The BUSY-screen browse list. Mock data for now, same shape as the real one.
-askRoutes.get('/faq', (c) => {
-  const faqs = [
-    {
-      faq_id: 1,
-      question: 'When is enrollment?',
-      answer: MOCK_ANSWER.text,
-      office: MOCK_ANSWER.office,
-      audio_url: new URL('/api/mock/audio/answer.mp3', c.req.url).toString(),
-      updated_at: MOCK_ANSWER.updated_at,
-    },
-  ]
+askRoutes.get('/faq', async (c) => {
+  try {
+    const faqs = await getPublishedFaqs()
+    const response = {
+      faqs: faqs.map((faq) => ({
+        faq_id: faq.id,
+        question: faq.question,
+        answer: faq.answer,
+        office: faq.office,
+        audio_url: faq.audioUrl,
+        updated_at: faq.updatedAt.toISOString().slice(0, 10),
+      })),
+    }
 
-  return c.json({ faqs }, 200, {
-    ETag: `"mock-${MOCK_ANSWER.updated_at}"`,
-  })
+    return c.json(response, 200, {
+      ETag: `"faqs-${faqs.length}-${faqs.at(-1)?.updatedAt.getTime() ?? 0}"`,
+    })
+  } catch (error) {
+    console.error('Published FAQ lookup failed:', error instanceof Error ? error.message : error)
+    return c.json({ error: 'FAQ service unavailable' }, 503)
+  }
 })

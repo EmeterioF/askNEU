@@ -1,8 +1,11 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
+import { put } from '@vercel/blob'
 import { db } from '../../db/index.js'
-import { faqEntries } from '../../db/tables/app.js'
+import { faqAudio, faqEntries } from '../../db/tables/app.js'
+import { synthesizeSpeech } from '../../ai/cloudflare.js'
 import { requireSession, type AuthEnv } from '../../middleware/session.js'
 
 export const createFaqInput = z.object({
@@ -72,6 +75,111 @@ adminFaqsRoutes.patch('/faqs/:id', async (c) => {
   }
 
   return c.json({ faq })
+})
+
+async function generateFaqAudio(id: number) {
+  const [faq] = await db
+    .select()
+    .from(faqEntries)
+    .where(eq(faqEntries.id, id))
+
+  if (!faq) {
+    return null
+  }
+
+  const audio = await synthesizeSpeech(faq.answer)
+  const textHash = createHash('sha256').update(faq.answer).digest('hex')
+  const blob = await put(`faq/${faq.id}/${textHash}.mp3`, audio, {
+    access: 'public',
+    contentType: 'audio/mpeg',
+    addRandomSuffix: false,
+    cacheControlMaxAge: 31536000,
+  })
+
+  await db
+    .insert(faqAudio)
+    .values({
+      faqId: faq.id,
+      kind: 'answer',
+      blobUrl: blob.url,
+      textHash,
+      voice: 'aura-2-en-luna',
+    })
+    .onConflictDoUpdate({
+      target: [faqAudio.faqId, faqAudio.kind],
+      set: {
+        blobUrl: blob.url,
+        textHash,
+        voice: 'aura-2-en-luna',
+        generatedAt: new Date(),
+      },
+    })
+
+  return faq
+}
+
+async function publishFaq(id: number) {
+  const faq = await generateFaqAudio(id)
+
+  if (!faq) {
+    return null
+  }
+
+  const [publishedFaq] = await db
+    .update(faqEntries)
+    .set({ status: true })
+    .where(eq(faqEntries.id, id))
+    .returning()
+
+  return publishedFaq
+}
+
+adminFaqsRoutes.post('/faqs/:id/publish', async (c) => {
+  const id = Number(c.req.param('id'))
+
+  if (!Number.isInteger(id) || id < 1) {
+    return c.json({ error: 'Invalid FAQ id' }, 400)
+  }
+
+  try {
+    const faq = await generateFaqAudio(id)
+
+    if (!faq) {
+      return c.json({ error: 'FAQ not found' }, 404)
+    }
+
+    return c.json({ faq }, 200)
+  } catch (error) {
+    console.error(
+      'FAQ publish failed:',
+      error instanceof Error ? error.message : error,
+    )
+    return c.json({ error: 'FAQ audio generation failed' }, 503)
+  }
+})
+
+adminFaqsRoutes.post('/faqs/:id/audio', async (c) => {
+  const id = Number(c.req.param('id'))
+
+  if (!Number.isInteger(id) || id < 1) {
+    return c.json({ error: 'Invalid FAQ id' }, 400)
+  }
+
+  try {
+    const faq = await publishFaq(id)
+
+    if (!faq) {
+      return c.json({ error: 'FAQ not found' }, 404)
+    }
+
+    return c.json({ faq }, 200)
+  } catch (error) {
+    console.error(
+      'FAQ audio regeneration failed:',
+      error instanceof Error ? error.message : error,
+    )
+    return c.json({ error: 'FAQ audio generation failed' }, 503)
+  }
 })
 
 adminFaqsRoutes.delete('/faqs/:id', async (c) => {

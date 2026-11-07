@@ -6,11 +6,13 @@
     "dev:frontend": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
+    "test:core": "tsx --test packages/core/src/pick.test.ts",
     "seed:staff": "tsx scripts/seed-staff.ts"
   },
   "dependencies": {
     "@hono/vercel": "^1.0.1",
     "@neondatabase/serverless": "^1.2.0",
+    "@vercel/blob": "^2.8.2",
     "axios": "^1.21.0",
     "better-auth": "1.7.14",
     "drizzle-orm": "^0.45.4",
