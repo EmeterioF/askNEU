@@ -2,8 +2,10 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { adminFaqsRoutes } from './routes/admin/faqs.js'
 import { adminOfficeRoutes } from './routes/admin/offices.js'
+import { askRoutes } from './routes/ask.js'
 import { authRoutes } from './routes/auth.js'
 import { healthRoutes } from './routes/health.js'
+import { mockAudioRoutes } from './routes/mockAudio.js'
 
 const app = new Hono()
 
@@ -17,6 +19,8 @@ app.onError((err, c) => {
 })
 
 app.route('/api', healthRoutes)
+app.route('/api', askRoutes)
+app.route('/api', mockAudioRoutes)
 app.route('/api/auth', authRoutes)
 app.route('/api/admin', adminOfficeRoutes)
 app.route('/api/admin', adminFaqsRoutes)
