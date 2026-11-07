@@ -1,13 +1,16 @@
 {
-  "name": "hono",
+  "name": "askneu",
+  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "tsx watch scripts/dev.ts",
-    "dev:frontend": "vite",
+    "dev:frontend": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test:core": "tsx --test packages/core/src/pick.test.ts",
-    "seed:staff": "tsx scripts/seed-staff.ts"
+    "seed:staff": "tsx scripts/seed-staff.ts",
+    "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
     "@hono/vercel": "^1.0.1",
@@ -26,7 +29,7 @@
   "devDependencies": {
     "@hono/node-server": "^2.1.5",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",

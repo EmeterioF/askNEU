@@ -1,4 +1,4 @@
-# AskNEU
+﻿# AskNEU
 
 > A friendly university information kiosk that helps students find the right answer or office.
 
