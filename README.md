@@ -1,137 +1,173 @@
 ﻿# AskNEU
 
-> A friendly university information kiosk that helps students find the right answer or office.
+> A university information kiosk. A student asks a question out loud, and AskNEU answers
+> with a staff-written FAQ answer — on screen and read aloud.
 
-## What is AskNEU?
-
-AskNEU is a project for Northeastern University students. A student will be able to ask a
-question by voice, and AskNEU will guide them to an approved FAQ answer or the correct office.
-
-The important rule is simple:
+The rule that shapes the whole system:
 
 **Staff write the answers. AskNEU only finds and reads them.**
 
-This keeps information accurate, consistent, and easy for staff to update.
+A model picks an FAQ ID from a closed list. It never writes the answer text, and the server
+rejects any ID that is not in the published list.
 
-## How it works
+## The kiosk loop
 
 ```mermaid
 flowchart LR
-    Student["Student asks a question"] --> Kiosk["AskNEU kiosk"]
-    Kiosk --> API["Hono API"]
-    API --> FAQ["Published FAQ list"]
-    API --> Office["Office information"]
-    FAQ --> Answer["Approved answer"]
-    Office --> Direction["Office direction"]
-    Answer --> Student
-    Direction --> Student
+    Student["Student holds the screen and asks"] --> ESP32["ESP32-S3-BOX-3<br/>records 16 kHz WAV"]
+    ESP32 -->|"POST /api/ask<br/>X-Device-Token"| API["Hono API on Vercel"]
+    API --> STT["Whisper<br/>speech to text"]
+    STT --> Pick["Model picks a published FAQ<br/>or returns nothing"]
+    Pick --> DB[("Neon PostgreSQL")]
+    DB --> Answer["Staff-written answer<br/>+ pre-generated MP3"]
+    Answer -->|"JSON + Blob URL"| ESP32
+    ESP32 --> Screen["Answer on screen"]
+    ESP32 --> Speaker["Answer through the speaker"]
 ```
 
-## Project layout
+Three outcomes come back from `/api/ask`: `answer` (high confidence), `hedged` (lower
+confidence, answered anyway) and `route` (nothing fits — the student is sent to an office).
+A technical failure shows BUSY on the kiosk instead of guessing.
+
+## Stack
+
+| Layer | Choice |
+| --- | --- |
+| Kiosk | ESP32-S3-BOX-3, ESP-IDF v5.4, LVGL 9, `esp_codec_dev`, Helix MP3 |
+| API | Hono (TypeScript) on Vercel serverless |
+| Database | Neon PostgreSQL + Drizzle ORM |
+| Auth | Better Auth, email + password, public sign-up disabled |
+| Speech to text | Cloudflare Workers AI — `@cf/openai/whisper-large-v3-turbo` |
+| Answer picker | Cloudflare Workers AI — `@cf/openai/gpt-oss-20b` |
+| Speech output | Cloudflare Workers AI — `@cf/deepgram/aura-2-en`, generated at publish time |
+| Audio storage | Vercel Blob |
+| Staff console | React + Vite |
+
+## Repository layout
 
 ```text
 askNEU/
-├── src/       React staff dashboard
-├── server/    Hono API, authentication, and database code
-├── api/       Vercel serverless entrypoint
-├── drizzle/   PostgreSQL database migrations
-├── scripts/   Local development and staff setup scripts
-└── Documents/ Project guides and team requirements
+├── api/           Vercel serverless entrypoint (one Hono function)
+├── server/        Hono app, auth, routes, database access, Cloudflare helpers
+├── packages/core/ FAQ picker prompt, parsing and validation + tests
+├── src/           React staff console (FAQ and office management)
+├── drizzle/       PostgreSQL migrations
+├── scripts/       local dev server and staff seed script
+└── firmware/      ESP32-S3-BOX-3 kiosk firmware (separate ESP-IDF project)
 ```
 
-The frontend and backend live in one repository and deploy together to Vercel.
+`firmware/` has its own [README](./firmware/README.md) with the hardware, flashing and
+Wi-Fi setup details.
 
-## Current features
+## Local development
 
-- Staff authentication with Better Auth
-- FAQ management: list, create, edit, publish/unpublish, and delete
-- Office management: list, create, edit, and delete
-- PostgreSQL database with Drizzle ORM
-- React + Vite frontend scaffold
-- Health checks for the API and database
-- Publish-time English MP3 generation with Cloudflare Aura-2 and Vercel Blob
-
-The voice question flow and kiosk experience are planned next.
-
-## Run locally
-
-### Requirements
-
-- Node.js
-- npm
-- A configured PostgreSQL database
-
-### Start the backend
+Requirements: Node.js 20+, npm, and a PostgreSQL database (Neon or local).
 
 ```powershell
 npm install
-npm run dev
+Copy-Item .env.example .env    # then fill in the values
+npx drizzle-kit migrate        # apply migrations
+npm run dev                    # API on http://localhost:3000
+npm run dev:frontend           # staff console (Vite)
 ```
 
-The API runs at `http://localhost:3000`.
-
-### Start the frontend
-
-In another terminal:
+Create the first staff account:
 
 ```powershell
-npm run dev:frontend
-```
-
-The frontend runs at the Vite development URL shown in the terminal.
-
-### Create the first staff account
-
-Set `STAFF_NAME`, `STAFF_EMAIL`, and `STAFF_PASSWORD` in your local environment, then run:
-
-```powershell
+$env:STAFF_NAME = "Your Name"
+$env:STAFF_EMAIL = "you@example.com"
+$env:STAFF_PASSWORD = "at-least-8-chars"
 npm run seed:staff
 ```
 
-Never commit `.env` or other secrets. Use [.env.example](./.env.example) as a template.
+### Environment variables
 
-## Main API routes
+All of these belong in `.env` locally and in the Vercel project settings in production.
+Values are never committed.
 
-All admin routes require a signed-in staff session.
+| Name | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `BETTER_AUTH_SECRET` | Session signing secret |
+| `BETTER_AUTH_URL` | Public origin of the app, e.g. `https://ask-neu.vercel.app` |
+| `CF_ACCOUNT_ID`, `CF_API_TOKEN` | Cloudflare Workers AI access |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob store used for FAQ audio |
+| `DEVICE_TOKEN` | Shared secret the kiosk sends as `X-Device-Token` |
+| `DISABLE_SIGNUP` | `true` in production: staff sign in, they do not register |
+
+Adding staff is a controlled action, not a public form:
+
+```powershell
+$env:STAFF_NAME = "New Staff"
+$env:STAFF_EMAIL = "staff@example.com"
+$env:STAFF_PASSWORD = "at-least-8-chars"
+npm run seed:staff
+```
+
+## API
+
+Kiosk routes require `X-Device-Token`. Admin routes require a staff session cookie.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/health` | Check that the API is running |
-| `GET` | `/api/health/db` | Check database connectivity |
-| `POST` | `/api/auth/sign-in/email` | Sign in |
+| `POST` | `/api/ask` | Kiosk question: WAV body → answer JSON + audio URL |
+| `GET` | `/api/faq` | Published FAQ list for the kiosk browse screen |
+| `GET` | `/api/health` | API health |
+| `GET` | `/api/health/db` | Database connectivity |
+| `POST` | `/api/auth/sign-in/email` | Staff sign in |
 | `GET`, `POST` | `/api/admin/faqs` | List or create FAQs |
 | `PATCH`, `DELETE` | `/api/admin/faqs/:id` | Edit or delete an FAQ |
-| `POST` | `/api/admin/faqs/:id/publish` | Generate MP3, upload it, and publish an FAQ |
-| `POST` | `/api/admin/faqs/:id/audio` | Regenerate an FAQ MP3 |
+| `POST` | `/api/admin/faqs/:id/publish` | Generate MP3, upload to Blob, publish |
+| `POST` | `/api/admin/faqs/:id/audio` | Regenerate one FAQ's audio |
 | `GET`, `POST` | `/api/admin/offices` | List or create offices |
 | `PATCH`, `DELETE` | `/api/admin/offices/:id` | Edit or delete an office |
 
-## Contributing safely
+`POST /api/ask` response shape:
 
-The shared integration branch is `dev`. Do not push directly to `main` or `dev`.
+```json
+{
+  "outcome": "answer",
+  "text": "Enrollment runs June 1 to 15 at the Registrar, room 204.",
+  "office": { "name": "Registrar", "room": "204", "hours": "8:00-17:00" },
+  "audio_urls": ["https://.../faq/1/clip.mp3"],
+  "faq_id": 1,
+  "updated_at": "2026-11-08",
+  "latency_ms": { "stt": 1100, "model": 900, "total": 2200 }
+}
+```
+
+## Deploy
+
+1. Push `master`. Vercel builds the staff console (`npm run build` → `dist`) and the
+   `api/index.ts` function.
+2. Add the environment variables above to the Vercel project (Production).
+3. Apply migrations against the production database: `npx drizzle-kit migrate`.
+4. Check `https://<domain>/api/health` and `/api/health/db`.
+5. Point the kiosk at the deployment: `ASKNEU_API_BASE_URL=https://<domain>` and the same
+   `DEVICE_TOKEN`, then rebuild and flash the firmware.
+
+## Security notes
+
+- `.env`, `firmware/sdkconfig` and the internal docs folder are gitignored. Only
+  `.env.example` (names, no values) is committed.
+- Public sign-up is disabled in production; accounts are created with `npm run seed:staff`.
+- The kiosk token is a shared secret baked into the firmware. Rotating it means reflashing
+  the device. Treat the firmware binary as public.
+- The kiosk only has 16 kHz mono capture and 8 s per question; the API should enforce the
+  same limits on incoming audio.
+
+## Contributing
+
+`master` is production, `dev` is integration. Branch from `dev`, open a PR into `dev`.
 
 ```powershell
-git clone https://github.com/EmeterioF/askNEU.git
-cd askNEU
-npm install
 git checkout dev
 git pull origin dev
 git checkout -b feat/your-short-name
-```
 
-After making changes:
-
-```powershell
 npm run typecheck
 npm run build
-git add .
-git commit -m "Describe your change"
-git push -u origin feat/your-short-name
+npm run test:core
 ```
 
-Open a pull request from your branch into `dev`.
-
-## Project goal
-
-AskNEU should make campus information easier to find while keeping staff in control of the
-content students receive.
+Do not commit `.env`, `firmware/sdkconfig`, generated credentials or production secrets.
