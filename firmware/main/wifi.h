@@ -2,14 +2,16 @@
 
 #include "esp_err.h"
 
-// Joins the saved network, or on a fresh board the development credentials from
-// menuconfig. When that fails, the board brings up the "AskNEU-Setup" access
-// point instead, so Wi-Fi can be changed from a phone. Blocks until an IP is
-// assigned; setup mode keeps waiting for the phone.
+// Connects the kiosk, in this order:
+//   1. the network saved in NVS;
+//   2. the development credentials from menuconfig, on a fresh board;
+//   3. setup mode (see wifi_setup.h) when neither connects.
+//
+// Blocks until an IP is assigned. In setup mode it keeps waiting for a phone.
 esp_err_t wifi_start(void);
 
-// Throws away the saved network and points at setup mode on the next
-// wifi_start(). Called when the screen is held during boot.
+// Forgets the saved network and the copy the Wi-Fi driver keeps, so the next
+// boot starts in setup mode. The caller is expected to restart afterwards.
 void wifi_factory_reset(void);
 
 // Copy of the last DHCP address, or an empty string before the first connect.

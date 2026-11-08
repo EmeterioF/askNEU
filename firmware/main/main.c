@@ -1,18 +1,19 @@
-#include <stdbool.h>
+// Boot order: storage, audio, screen, buttons, conversation hook, network,
+// clock. The kiosk is usable once Wi-Fi has an IP; time sync only matters for
+// HTTPS and is deliberately non-fatal.
 
 #include "esp_err.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 
 #include "audio.h"
+#include "button.h"
 #include "conversation.h"
+#include "time_sync.h"
 #include "ui.h"
 #include "wifi.h"
 
 static const char *TAG = "askneu";
-
-// Keep the screen pressed this long at boot to forget the saved network.
-#define WIFI_RESET_HOLD_MS 5000
 
 static void init_nvs(void)
 {
@@ -38,16 +39,12 @@ void app_main(void)
         ESP_LOGE(TAG, "audio failed to start, continuing silent");
     }
 
-    bool ui_ok = ui_start() == ESP_OK;
-
-    if (!ui_ok) {
+    if (ui_start() != ESP_OK) {
         ESP_LOGE(TAG, "ui failed to start, continuing headless");
     }
 
-    if (ui_ok && ui_hold_detected(WIFI_RESET_HOLD_MS)) {
-        ESP_LOGW(TAG, "screen held at boot: forgetting the saved network");
-        wifi_factory_reset();
-    }
+    // Not fatal: the reset gesture is a convenience, the kiosk works without it.
+    button_start();
 
     conversation_start();
 
@@ -55,6 +52,12 @@ void app_main(void)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "wifi failed: %s", esp_err_to_name(err));
         return;
+    }
+
+    // TLS certificate checks need the real date; without this HTTPS fails even
+    // though the network is fine.
+    if (time_sync_start() != ESP_OK) {
+        ESP_LOGW(TAG, "clock not synced, https requests may fail");
     }
 
     ESP_LOGI(TAG, "ready at %s", wifi_ip());

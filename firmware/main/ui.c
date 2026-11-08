@@ -1,13 +1,18 @@
+// Everything the student sees: the idle talk button, the wrapped answer card,
+// the setup-mode card and the small status hint at the bottom.
+//
+// Every public function takes the LVGL lock itself and may be called from any
+// task. The private helpers assume the lock is already held.
+
 #include "ui.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #include "audio.h"
 #include "bsp/esp-bsp.h"
 #include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "lvgl.h"
 
 static const char *TAG = "askneu_ui";
@@ -21,9 +26,6 @@ static const char *TAG = "askneu_ui";
 #define COLOR_ERROR 0xFF8A5B
 
 #define BUTTON_SIZE 120
-
-// Touch sampling while checking for a boot-time hold.
-#define HOLD_POLL_MS 100
 
 static lv_obj_t *s_hint;
 static lv_obj_t *s_button;
@@ -161,7 +163,15 @@ void ui_set_status(ui_status_t status)
     bsp_display_unlock();
 }
 
-void ui_show_answer(const char *text)
+// Caller holds the LVGL lock. Replaces the talk button with a wrapped card.
+static void card_set(const char *text)
+{
+    lv_label_set_text(s_answer, text);
+    lv_obj_set_hidden(s_answer, false);
+    lv_obj_set_hidden(s_button, true);
+}
+
+void ui_show_card(const char *text)
 {
     if (text == NULL) {
         return;
@@ -171,50 +181,10 @@ void ui_show_answer(const char *text)
         return;
     }
 
-    lv_label_set_text(s_answer, text);
-    lv_obj_set_hidden(s_answer, false);
-    lv_obj_set_hidden(s_button, true);
+    card_set(text);
     lv_obj_set_hidden(s_hint, true);
 
     bsp_display_unlock();
-}
-
-bool ui_hold_detected(uint32_t hold_ms)
-{
-    lv_indev_t *indev = bsp_display_get_input_dev();
-
-    if (indev == NULL) {
-        return false;
-    }
-
-    if (bsp_display_lock(0)) {
-        hint_set("hold the screen to change Wi-Fi", COLOR_MUTED);
-        bsp_display_unlock();
-    }
-
-    uint32_t held_ms = 0;
-
-    for (uint32_t elapsed = 0; elapsed < hold_ms; elapsed += HOLD_POLL_MS) {
-        bool pressed = false;
-
-        // LVGL keeps the input device state current, so no touch driver access
-        // is needed here; the lock keeps this in step with the LVGL task.
-        if (bsp_display_lock(0)) {
-            pressed = lv_indev_get_state(indev) == LV_INDEV_STATE_PRESSED;
-            bsp_display_unlock();
-        }
-
-        // Letting go at any point starts the count again.
-        held_ms = pressed ? held_ms + HOLD_POLL_MS : 0;
-        vTaskDelay(pdMS_TO_TICKS(HOLD_POLL_MS));
-    }
-
-    if (bsp_display_lock(0)) {
-        hint_set("hold the screen and ask", COLOR_MUTED);
-        bsp_display_unlock();
-    }
-
-    return held_ms >= hold_ms;
 }
 
 void ui_show_setup(const char *ssid, const char *pop)
@@ -231,9 +201,7 @@ void ui_show_setup(const char *ssid, const char *pop)
         return;
     }
 
-    lv_label_set_text(s_answer, text);
-    lv_obj_set_hidden(s_answer, false);
-    lv_obj_set_hidden(s_button, true);
+    card_set(text);
     lv_obj_set_hidden(s_hint, false);
     hint_set("waiting for your phone...", COLOR_MUTED);
 

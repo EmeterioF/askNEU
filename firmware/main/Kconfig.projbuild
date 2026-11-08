@@ -14,11 +14,10 @@ config ASKNEU_WIFI_PASSWORD
 
 config ASKNEU_API_BASE_URL
     string "Backend base URL"
-    default "http://192.168.8.170:3000"
+    default "https://ask-neu.vercel.app"
     help
         Origin only, no trailing slash. The firmware appends /api/ask.
-        Keep the mock backend on this same URL so a real deployment only
-        changes this value.
+        Point this at http://<lan-ip>:3000 when running the backend locally.
 
 config ASKNEU_DEVICE_TOKEN
     string "Device token (X-Device-Token)"

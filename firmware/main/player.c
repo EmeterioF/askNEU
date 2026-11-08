@@ -1,3 +1,7 @@
+// Downloads an answer clip into PSRAM and plays it. The container is sniffed
+// instead of trusted from the URL: RIFF/WAVE goes straight to the codec, and
+// everything else is decoded with Helix MP3 (the format the backend produces).
+
 #include "player.h"
 
 #include <stdbool.h>
@@ -214,6 +218,7 @@ static esp_err_t play_mp3(const uint8_t *data, size_t len)
     bool stream_open = false;
     int sample_rate = 0;
     size_t frames_played = 0;
+    int32_t peak = 0;
 
     while (remaining > 0) {
         int offset = MP3FindSyncWord(cursor, remaining);
@@ -263,6 +268,15 @@ static esp_err_t play_mp3(const uint8_t *data, size_t len)
 
         size_t frames = to_mono(frame, info.nChans, (size_t)info.outputSamps, mono);
 
+        // Logged so a quiet answer can be told apart from a quiet source.
+        for (size_t i = 0; i < frames; i++) {
+            int32_t mag = mono[i] < 0 ? -(int32_t)mono[i] : mono[i];
+
+            if (mag > peak) {
+                peak = mag;
+            }
+        }
+
         if (audio_stream_write(mono, frames) != ESP_OK) {
             break;
         }
@@ -278,8 +292,9 @@ static esp_err_t play_mp3(const uint8_t *data, size_t len)
     heap_caps_free(frame);
     heap_caps_free(mono);
 
-    ESP_LOGI(TAG, "mp3 played %.1f s at %d Hz",
-             (double)frames_played / (sample_rate ? sample_rate : 1), sample_rate);
+    ESP_LOGI(TAG, "mp3 played %.1f s at %d Hz (peak %ld)",
+             (double)frames_played / (sample_rate ? sample_rate : 1), sample_rate,
+             (long)peak);
 
     return frames_played > 0 ? ESP_OK : ESP_FAIL;
 }

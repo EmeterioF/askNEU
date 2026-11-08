@@ -1,0 +1,5 @@
+# Not part of the web build; firmware alone is 400 MB of build artifacts.
+firmware/
+Documents/
+test/
+dist/

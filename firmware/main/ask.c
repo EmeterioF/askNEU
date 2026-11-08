@@ -1,3 +1,8 @@
+// One request per question: the recorded PCM is wrapped in a WAV header and
+// posted to the backend, and the JSON answer is parsed into ask_answer_t.
+// Retries once, because a single Wi-Fi hiccup should not cost the student an
+// answer.
+
 #include "ask.h"
 
 #include <stdio.h>
@@ -5,6 +10,7 @@
 #include <string.h>
 
 #include "cJSON.h"
+#include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
@@ -100,6 +106,9 @@ static esp_err_t ask_send_once(const uint8_t *pcm, size_t pcm_bytes, uint32_t du
         .url = CONFIG_ASKNEU_API_BASE_URL "/api/ask",
         .method = HTTP_METHOD_POST,
         .timeout_ms = 20000,
+        // Works for both http:// on the LAN and https:// in production; the
+        // bundle is ignored for plain connections.
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);

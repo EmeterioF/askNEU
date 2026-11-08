@@ -1,3 +1,7 @@
+// One kiosk turn: short clips are rejected, everything else goes to the
+// backend, the answer text goes on screen and the answer clip is played.
+// Runs on the audio worker task, so it may block on the network.
+
 #include "conversation.h"
 
 #include <stddef.h>
@@ -43,7 +47,7 @@ static void on_clip(const uint8_t *pcm, size_t bytes)
         return;
     }
 
-    ui_show_answer(answer.text);
+    ui_show_card(answer.text);
 
     // The text stays on screen while the clip plays; then the kiosk goes back
     // to inviting the next student. The short hold keeps a failed clip from

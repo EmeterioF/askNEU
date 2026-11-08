@@ -1,3 +1,7 @@
+// Microphone capture and speaker playback through the BSP codecs. Capture runs
+// on a short worker task so the LVGL task never blocks on I2S; the worker hands
+// the finished clip to the handler registered by conversation.c.
+
 #include "audio.h"
 
 #include <math.h>
@@ -14,7 +18,11 @@
 static const char *TAG = "askneu_audio";
 
 #define READ_CHUNK 1024
-#define SPEAKER_VOLUME 90
+#define SPEAKER_VOLUME 100
+// The codec's default curve tops out at 0 dB, but the ES8311 DAC can do +32 dB.
+// +12 dB distorted the small speaker on a -8 dBFS clip, so +4 dB is the ceiling
+// for now: louder than the default, still inside the amp's headroom.
+#define SPEAKER_MAX_DB 4.0f
 // ES7210 tops out at 37.5 dB; the BSP audio example asks for 42 dB for the
 // same reason: the mics sit far from the talker and are very quiet at 0 dB.
 #define MIC_GAIN_DB 42.0f
@@ -92,6 +100,29 @@ static void capture(void)
     log_clip_level();
 }
 
+// The curve can only be installed while the codec is open, and it only needs
+// to happen once per boot.
+static void apply_speaker_volume(void)
+{
+    static bool s_curve_set;
+
+    if (!s_curve_set) {
+        esp_codec_dev_vol_map_t map[] = {
+            { .vol = 0, .db_value = -50.0f },
+            { .vol = SPEAKER_VOLUME, .db_value = SPEAKER_MAX_DB },
+        };
+        esp_codec_dev_vol_curve_t curve = { .vol_map = map, .count = 2 };
+
+        if (esp_codec_dev_set_vol_curve(s_speaker, &curve) == ESP_CODEC_DEV_OK) {
+            s_curve_set = true;
+        } else {
+            ESP_LOGW(TAG, "speaker curve rejected, staying on the default");
+        }
+    }
+
+    esp_codec_dev_set_out_vol(s_speaker, SPEAKER_VOLUME);
+}
+
 esp_err_t audio_stream_begin(uint32_t sample_rate)
 {
     esp_codec_dev_sample_info_t format = {
@@ -105,7 +136,7 @@ esp_err_t audio_stream_begin(uint32_t sample_rate)
         return ESP_FAIL;
     }
 
-    esp_codec_dev_set_out_vol(s_speaker, SPEAKER_VOLUME);
+    apply_speaker_volume();
 
     return ESP_OK;
 }
